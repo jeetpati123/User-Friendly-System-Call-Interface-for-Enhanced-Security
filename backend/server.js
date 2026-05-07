@@ -552,6 +552,7 @@ app.listen(PORT, () => {
   console.log('║   👑 admin / admin123   (role: admin)            ║');
   console.log('║   🛡  alice / user123    (role: user)             ║');
   console.log('║   👤 guest / guest123   (role: user)             ║');
+  console.log('║   🛡  moderator / mod123  (role: moderator)       ║');
   console.log('╚══════════════════════════════════════════════════╝\n');
 
   if (!fs.existsSync(path.join(__dirname, '..', 'data', 'users.json'))) {

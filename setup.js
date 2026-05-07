@@ -28,7 +28,7 @@ async function createUsers() {
   const adminHash = await bcrypt.hash('admin123', SALT_ROUNDS);
   const userHash  = await bcrypt.hash('user123',  SALT_ROUNDS);
   const guestHash = await bcrypt.hash('guest123', SALT_ROUNDS);
-
+  const modHash   = await bcrypt.hash('mod123',   SALT_ROUNDS);
   const users = [
     {
       id: 1,
@@ -60,6 +60,18 @@ async function createUsers() {
       isLocked: false,
       createdAt: new Date().toISOString()
     }
+
+    ,
+{
+  id: 4,
+  username: 'moderator',
+  password: modHash,         // hashed "mod123"
+  role: 'moderator',
+  email: 'moderator@syscall.local',
+  failedAttempts: 0,
+  isLocked: false,
+  createdAt: new Date().toISOString()
+}
   ];
 
   fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
@@ -67,6 +79,7 @@ async function createUsers() {
   console.log('   👑 admin   / admin123  (role: admin)');
   console.log('   👤 alice   / user123   (role: user)');
   console.log('   👤 guest   / guest123  (role: user)');
+  console.log('   🛡️ moderator / mod123    (role: moderator)');
 }
 
 // ─── Create initial logs file ──────────────────────────────────────────────

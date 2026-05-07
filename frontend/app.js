@@ -98,10 +98,24 @@ function populateUserInfo() {
     if (el) { el.textContent = `"${currentUser.username}"`; el.style.color = 'var(--purple)'; }
   });
 
+  const isModerator = currentUser.role === 'moderator';
+
   if (!isAdmin) {
     document.querySelectorAll('.admin-only').forEach(btn => {
+      if (isModerator && (btn.id === 'btn-delete_file' || btn.id === 'btn-rename_file')) {
+        return; // moderator can use these
+      }
       btn.style.opacity = '0.4';
       btn.title = 'Admin role required';
+    });
+  }
+  if (isModerator) {
+    ['btn-write_file', 'btn-copy_file'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        btn.style.opacity = '0.4';
+        btn.title = 'Moderator role cannot perform this action';
+      }
     });
   }
 }
@@ -672,8 +686,10 @@ function renderUsers(users) {
                  style="background:var(--bg-dark);border:1px solid var(--border);
                         color:var(--text-secondary);font-family:var(--font-mono);
                         font-size:0.72rem;padding:3px 6px;border-radius:4px;cursor:pointer;">
-                 <option value="user"  ${u.role==='user'  ? 'selected':''}>👤 user</option>
-                 <option value="admin" ${u.role==='admin' ? 'selected':''}>👑 admin</option>
+                 <option value="user"      ${u.role==='user'      ? 'selected':''}>👤 user</option>
+                <option value="moderator" ${u.role==='moderator' ? 'selected':''}>🛡️ moderator</option>
+                <option value="admin"     ${u.role==='admin'     ? 'selected':''}>👑 admin</option>
+                 
                </select>
                <button class="btn btn-blue btn-sm"
                  onclick="changeRole('${escHtml(u.username)}')"
@@ -708,7 +724,7 @@ async function unlockUser(username) {
  *
  * The server enforces:
  *  - Admin cannot change their own role
- *  - Role must be 'admin' or 'user'
+ *  -  Role must be 'admin', 'moderator', or 'user'
  */
 async function changeRole(username) {
   const select  = document.getElementById(`roleSelect-${username}`);
