@@ -1,0 +1,43 @@
+{
+  "config.cfg": {
+    "content": "# System Configuration\nmax_users=100\nlog_level=INFO\nsession_timeout=1800",
+    "owner": "admin",
+    "permissions": "rw-------",
+    "size": 72,
+    "createdAt": "2026-05-06T09:49:42.677Z"
+  },
+  "report.txt": {
+    "content": "System Performance Report\n==========================\nCPU Usage: 45%\nMemory: 2.1GB / 8GB\nDisk: 120GB / 500GB",
+    "owner": "admin",
+    "permissions": "rw-r--r--",
+    "size": 103,
+    "createdAt": "2026-05-06T09:49:42.677Z"
+  },
+  "renamed.txt": {
+    "content": "Welcome to the Secure System Call Interface!\nThis is a simulated filesystem for demonstration.",
+    "owner": "admin",
+    "permissions": "rw-r--r--",
+    "size": 95,
+    "createdAt": "2026-05-06T09:49:42.677Z",
+    "updatedAt": "2026-05-06T09:50:22.678Z",
+    "lastModifiedBy": "admin"
+  },
+  "backup.txt": {
+    "content": "Alice's personal notes:\n1. Study OS concepts\n2. Complete project\n3. Submit on time",
+    "owner": "admin",
+    "lastModifiedBy": "admin",
+    "permissions": "rw-r--r--",
+    "size": 74,
+    "createdAt": "2026-05-06T09:50:59.126Z",
+    "updatedAt": "2026-05-06T09:50:59.126Z"
+  },
+  "hlo.txt": {
+    "content": "Alice's personal notes:\n1. Study OS concepts\n2. Complete project\n3. Submit on time",
+    "owner": "alice",
+    "permissions": "rw-rw-r--",
+    "size": 74,
+    "createdAt": "2026-05-06T09:49:42.677Z",
+    "updatedAt": "2026-05-07T08:19:22.905Z",
+    "lastModifiedBy": "admin"
+  }
+}
