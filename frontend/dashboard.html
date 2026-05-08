@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SecureSyscall — Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Theme init: runs before paint to prevent flash -->
+  <script>
+    (function(){
+      var saved = localStorage.getItem('theme');
+      var sys   = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', saved || sys);
+    })();
+  </script>
+  <!-- jsPDF CDN — used by exportLogsPDF() in app.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+
+<div class="dashboard">
+
+  <!-- ────────────────────────── NAVBAR ────────────────────────────────── -->
+  <nav class="navbar">
+    <div class="navbar-brand">🔐 <span>Secure</span>Syscall</div>
+
+    <div class="navbar-status">
+      <div class="status-dot"></div>
+      KERNEL INTERFACE ONLINE
+    </div>
+
+    <div class="navbar-right">
+      <span id="timerDisplay" style="font-family:var(--font-mono);font-size:0.72rem;color:var(--text-muted);">
+        ⏱ 30:00
+      </span>
+      <div class="user-badge">
+        <span id="navUsername">—</span>
+        <span id="navRole" class="role-badge" style="font-size:0.62rem;padding:1px 6px;border-radius:3px;">—</span>
+      </div>
+      <!-- Theme toggle -->
+      <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light/dark mode" aria-label="Toggle theme">🌙</button>
+      <button class="btn btn-secondary btn-sm" onclick="handleLogout()">Logout →</button>
+    </div>
+  </nav>
+
+  <!-- ─────────────────────────── MAIN LAYOUT ──────────────────────────── -->
+  <div class="main-layout">
+
+    <!-- ──────────────── SIDEBAR ─────────────────── -->
+    <aside class="sidebar">
+
+      <div class="sidebar-section-label">System Calls</div>
+
+      <button class="syscall-btn active" onclick="showPanel('list_files')" id="btn-list_files">
+        <span class="icon">📁</span><span>list_files</span>
+        <span class="badge badge-new">all</span>
+      </button>
+
+      <button class="syscall-btn" onclick="showPanel('read_file')" id="btn-read_file">
+        <span class="icon">📖</span><span>read_file</span>
+        <span class="badge badge-new">all</span>
+      </button>
+
+      <button class="syscall-btn" onclick="showPanel('write_file')" id="btn-write_file">
+        <span class="icon">✏️</span><span>write_file</span>
+        <span class="badge badge-new">all</span>
+      </button>
+
+      <button class="syscall-btn admin-only" onclick="showPanel('delete_file')" id="btn-delete_file">
+        <span class="icon">🗑️</span><span>delete_file</span>
+        <span class="badge badge-admin">admin</span>
+      </button>
+
+      <button class="syscall-btn admin-only" onclick="showPanel('rename_file')" id="btn-rename_file">
+        <span class="icon">🏷️</span><span>rename_file</span>
+        <span class="badge badge-admin">admin</span>
+      </button>
+
+      <button class="syscall-btn" onclick="showPanel('copy_file')" id="btn-copy_file">
+        <span class="icon">📋</span><span>copy_file</span>
+        <span class="badge badge-new">all</span>
+      </button>
+
+      <div class="sidebar-section-label">Admin Tools</div>
+
+      <button class="syscall-btn admin-only" onclick="showPanel('logs')" id="btn-logs">
+        <span class="icon">📜</span><span>view_logs</span>
+        <span class="badge badge-admin">admin</span>
+      </button>
+
+      <button class="syscall-btn admin-only" onclick="showPanel('users')" id="btn-users">
+        <span class="icon">👥</span><span>user_mgmt</span>
+        <span class="badge badge-admin">admin</span>
+      </button>
+
+      <div class="sidebar-section-label">My Account</div>
+
+      <button class="syscall-btn" onclick="showPanel('profile')" id="btn-profile">
+        <span class="icon">👤</span><span>profile</span>
+        <span class="badge badge-new">you</span>
+      </button>
+
+      <button class="syscall-btn" onclick="showPanel('change_password')" id="btn-change_password">
+        <span class="icon">🔑</span><span>change_pwd</span>
+        <span class="badge badge-new">you</span>
+      </button>
+
+      <!-- Sidebar process info -->
+      <div class="sidebar-bottom">
+        <div style="font-family:var(--font-mono);font-size:0.68rem;color:var(--text-muted);padding:0.5rem;line-height:1.9;">
+          <div>PID: <span style="color:var(--green)" id="sessionPID">—</span></div>
+          <div>UID: <span id="sidebarUID" style="color:var(--blue)">—</span></div>
+          <div>GID: <span id="sidebarGID" style="color:var(--yellow)">—</span></div>
+          <div>ROLE: <span id="sidebarRole" style="color:var(--purple)">—</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ─────────────────── CONTENT AREA ──────────────────── -->
+    <main class="content">
+
+      <!-- ══════ STATS ROW ══════ -->
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card green">
+          <div class="stat-value" id="statTotal">0</div>
+          <div class="stat-label">Total Calls</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-value" id="statSuccess">0</div>
+          <div class="stat-label">Successful</div>
+        </div>
+        <div class="stat-card red">
+          <div class="stat-value" id="statDenied">0</div>
+          <div class="stat-label">Denied</div>
+        </div>
+        <div class="stat-card yellow">
+          <div class="stat-value" id="statFiles">0</div>
+          <div class="stat-label">Virtual Files</div>
+        </div>
+      </div>
+      <div style="text-align:right; margin-top:-8px; margin-bottom:12px;">
+        <button class="btn btn-secondary btn-sm" onclick="refreshStats()" title="Refresh stats from server">
+          ↻ Refresh Stats
+        </button>
+      </div>
+
+      <!-- ══════ PANEL: list_files ══════ -->
+      <div class="panel syscall-panel active" id="panel-list_files">
+        <div class="panel-header">
+          <div class="panel-title">📁 list_files — Virtual Filesystem</div>
+          <button class="btn btn-secondary btn-sm" onclick="executeCall('list_files','','').then(refreshStats)">
+            ↻ Refresh
+          </button>
+        </div>
+        <div class="panel-body">
+          <div class="call-signature">
+            <span class="fn-name">systemCall</span>(<span class="fn-user" id="sig-lf-user">user</span>,
+            "<span class="fn-action">list_files</span>", "*")
+          </div>
+          <div id="fileListArea" style="min-height:80px;">
+            <p style="font-family:var(--font-mono);font-size:0.8rem;color:var(--text-muted);">
+              Click Refresh to list virtual files…
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════ PANEL: read_file ══════ -->
+      <div class="panel syscall-panel" id="panel-read_file">
+        <div class="panel-header">
+          <div class="panel-title">📖 read_file — Read Virtual File</div>
+          <button class="btn btn-blue btn-sm" onclick="executeReadFile()">▶ Execute</button>
+        </div>
+        <div class="panel-body">
+          <div class="call-signature">
+            <span class="fn-name">systemCall</span>(<span class="fn-user" id="sig-rf-user">user</span>,
+            "<span class="fn-action">read_file</span>",
+            "<span class="fn-resource" id="sig-rf-res">filename</span>")
+          </div>
+
+          <label class="form-label" style="margin-top:0.8rem">Select File</label>
+          <div class="file-selector" id="rfFileSelector">
+            <span style="font-family:var(--font-mono);font-size:0.78rem;color:var(--text-muted);">Loading…</span>
+          </div>
+
+          <label class="form-label">Or type filename:</label>
+          <input class="form-input" type="text" id="rfFilename" placeholder="e.g. readme.txt"
+            oninput="document.getElementById('sig-rf-res').textContent = this.value || 'filename'" />
+
+          <div class="response-terminal mt-2" id="rfResponse">
+            $ read_file <span class="terminal-cursor"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════ PANEL: write_file ══════ -->
+      <div class="panel syscall-panel" id="panel-write_file">
+        <div class="panel-header">
+          <div class="panel-title">✏️ write_file — Write to Virtual File</div>
+          <button class="btn btn-blue btn-sm" onclick="executeWriteFile()">▶ Execute</button>
+        </div>
+        <div class="panel-body">
+          <div class="call-signature">
+            <span class="fn-name">systemCall</span>(<span class="fn-user" id="sig-wf-user">user</span>,
+            "<span class="fn-action">write_file</span>",
+            "<span class="fn-resource" id="sig-wf-res">filename</span>", content)
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:0.8rem;">
+            <div>
+              <label class="form-label">Filename</label>
+              <input class="form-input" type="text" id="wfFilename" placeholder="e.g. myfile.txt"
+                oninput="document.getElementById('sig-wf-res').textContent = this.value || 'filename'" />
+              <p style="font-family:var(--font-mono);font-size:0.7rem;color:var(--text-muted);margin-top:0.4rem;">
+                Creates a new file or overwrites existing.
+              </p>
+            </div>
+            <div>
+              <label class="form-label">Or pick existing:</label>
+              <div class="file-selector" id="wfFileSelector" style="flex-direction:column;gap:0.3rem;">
+                <span style="font-family:var(--font-mono);font-size:0.78rem;color:var(--text-muted);">Loading…</span>
+              </div>
+            </div>
+          </div>
+
+          <label class="form-label mt-2">File Content</label>
+          <textarea class="textarea-field" id="wfContent" rows="5"
+            placeholder="Type the content to write into the file…"></textarea>
+          <div style="text-align:right;font-family:var(--font-mono);font-size:0.68rem;color:var(--text-muted);margin-top:2px;">
+            <span id="wfCharCount">0</span> / 10,000 chars
+          </div>
+
+          <div class="response-terminal mt-2" id="wfResponse">
+            $ write_file <span class="terminal-cursor"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════ PANEL: delete_file (admin only) ══════ -->
+      <div class="panel syscall-panel" id="panel-delete_file">
+        <div class="panel-header">
+          <div class="panel-title">🗑️ delete_file — Permanently Remove File</div>
+          <span style="font-family:var(--font-mono);font-size:0.72rem;color:var(--yellow);">⚠ Admin Only</span>
+        </div>
+        <div class="panel-body">
+          <div class="call-signature">
+            <span class="fn-name">systemCall</span>(<span class="fn-user" id="sig-df-user">user</span>,
+            "<span class="fn-action">delete_file</span>",
+            "<span class="fn-resource" id="sig-df-res">filename</span>")
+          </div>
+
+          <div class="alert alert-warning show mt-2" style="display:flex!important;align-items:center;gap:0.5rem;">
+            ⚠ Irreversible operation. Non-admin attempts are denied and logged.
+          </div>
+
+          <label class="form-label mt-2">Select File to Delete</label>
+          <div class="file-selector" id="dfFileSelector">
+            <span style="font-family:var(--font-mono);font-size:0.78rem;color:var(--text-muted);">Loading…</span>
+          </div>
+          <input class="form-input mt-2" type="text" id="dfFilename" placeholder="Or type filename"
+            oninput="document.getElementById('sig-df-res').textContent = this.value || 'filename'" />
+
+          <button class="btn btn-danger mt-2" onclick="executeDeleteFile()">
+            🗑️ Execute delete_file
+          </button>
+
+          <div class="response-terminal mt-2" id="dfResponse">
+            $ delete_file <span class="terminal-cursor"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════ PANEL: rename_file (admin + moderator) ══════ -->
+      <div class="panel syscall-panel" id="panel-rename_file">
+        <div class="panel-header">
+          <div class="panel-title">🏷️ rename_file — Rename a File</div>
+          <button class="btn btn-blue btn-sm" onclick="executeRenameFile()">▶ Execute</button>
+        </div>
+        <div class="panel-body">
+          <div class="call-signature">
+            <span class="fn-name">systemCall</span>(<span class="fn-user" id="sig-rnf-user">user</span>,
+            "<span class="fn-action">rename_file</span>",
+            "<span class="fn-resource" id="sig-rnf-src">old_name</span>",
+            "<span class="fn-resource" id="sig-rnf-dst">new_name</span>")
+          </div>
+
+          <div class="alert alert-warning show mt-2" style="display:flex!important;align-items:center;gap:0.5rem;">
+            ⚠ Admin &amp; Moderator only. Destination must not already exist.
+          </div>
+
+          <label class="form-label mt-2">Select File to Rename</label>
+          <div class="file-selector" id="rnfFileSelector">
+            <span style="font-family:var(--font-mono);font-size:0.78rem;color:var(--text-muted);">Loading…</span>
+          </div>
+          <input class="form-input mt-2" type="text" id="rnfOldName" placeholder="Or type current filename"
+            oninput="document.getElementById('sig-rnf-src').textContent = this.value || 'old_name'" />
+
+          <label class="form-label mt-2">New Filename</label>
+          <input class="form-input" type="text" id="rnfNewName" placeholder="e.g. renamed_file.txt"
+            oninput="document.getElementById('sig-rnf-dst').textContent = this.value || 'new_name'" />
+
+          <button class="btn btn-blue mt-2" onclick="executeRenameFile()">
+            🏷️ Execute rename_file
+          </button>
+
+          <div class="response-terminal mt-2" id="rnfResponse">
+            $ rename_file <span class="terminal-cursor"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════ PANEL: copy_file (admin + user) ══════ -->
+      <div class="panel syscall-panel" id="panel-copy_file">
+        <div class="panel-header">
+          <div class="panel-title">📋 copy_file — Duplicate a File</div>
+          <button class="btn btn-blue btn-sm" onclick="executeCopyFile()">▶ Execute</button>
+        </div>
+        <div class="panel-body">
+          <div class="call-signature">
+            <span class="fn-name">systemCall</span>(<span class="fn-user" id="sig-cpf-user">user</span>,
+            "<span class="fn-action">copy_file</span>",
+            "<span class="fn-resource" id="sig-cpf-src">source</span>",
+            "<span class="fn-resource" id="sig-cpf-dst">destination</span>")
+          </div>
+
+          <p style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-muted);margin-top:0.6rem;">
+            ℹ The copy is owned by you. The original file is not affected.
+          </p>
+
+          <label class="form-label mt-2">Select Source File</label>
+          <div class="file-selector" id="cpfFileSelector">
+            <span style="font-family:var(--font-mono);font-size:0.78rem;color:var(--text-muted);">Loading…</span>
+          </div>
+          <input class="form-input mt-2" type="text" id="cpfSrcName" placeholder="Or type source filename"
+            oninput="document.getElementById('sig-cpf-src').textContent = this.value || 'source'" />
+
+          <label class="form-label mt-2">Destination Filename</label>
+          <input class="form-input" type="text" id="cpfDstName" placeholder="e.g. backup_notes.txt"
+            oninput="document.getElementById('sig-cpf-dst').textContent = this.value || 'destination'" />
+
+          <button class="btn btn-blue mt-2" onclick="executeCopyFile()">
+            📋 Execute copy_file
+          </button>
+
+          <div class="response-terminal mt-2" id="cpfResponse">
+            $ copy_file <span class="terminal-cursor"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════ PANEL: logs (admin only) ══════ -->
+      <div class="panel syscall-panel" id="panel-logs">
+        <div class="panel-header">
+          <div class="panel-title">📜 System Call Logs</div>
+          <div style="display:flex;gap:0.5rem;">
+            <button class="btn btn-secondary btn-sm" onclick="loadLogs()">↻ Refresh</button>
+            <a class="btn btn-blue btn-sm" href="/api/logs/export" target="_blank">⬇ Export JSON</a>
+            <button class="btn btn-secondary btn-sm" onclick="exportLogsPDF()">📄 Export PDF</button>
+            <button class="btn btn-danger btn-sm" onclick="clearAllLogs()">🗑 Clear</button>
+          </div>
+        </div>
+        <div class="panel-body" style="padding:0">
+          <!-- Filters -->
+          <div style="padding:0.8rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:0.8rem;flex-wrap:wrap;align-items:center;">
+            <input class="form-input" type="text" id="logSearch" placeholder="🔍 Search logs…"
+              style="max-width:220px;padding:0.35rem 0.75rem;font-size:0.8rem;"
+              oninput="filterLogs()" />
+            <select id="logStatusFilter" onchange="filterLogs()"
+              style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-secondary);
+                     font-family:var(--font-mono);font-size:0.78rem;padding:0.35rem 0.6rem;border-radius:var(--radius);">
+              <option value="">All Statuses</option>
+              <option value="SUCCESS">SUCCESS</option>
+              <option value="DENIED">DENIED</option>
+              <option value="FAILED">FAILED</option>
+              <option value="ERROR">ERROR</option>
+            </select>
+            <select id="logRoleFilter" onchange="filterLogs()"
+              style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-secondary);
+                     font-family:var(--font-mono);font-size:0.78rem;padding:0.35rem 0.6rem;border-radius:var(--radius);">
+              <option value="">All Roles</option>
+              <option value="admin">admin</option>
+              <option value="moderator">moderator</option>
+              <option value="user">user</option>
+            </select>
+            <select id="logActionFilter" onchange="filterLogs()"
+              style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-secondary);
+                     font-family:var(--font-mono);font-size:0.78rem;padding:0.35rem 0.6rem;border-radius:var(--radius);">
+              <option value="">All Actions</option>
+              <option value="LOGIN">LOGIN</option>
+              <option value="LOGOUT">LOGOUT</option>
+              <option value="REGISTER">REGISTER</option>
+              <option value="list_files">list_files</option>
+              <option value="read_file">read_file</option>
+              <option value="write_file">write_file</option>
+              <option value="delete_file">delete_file</option>
+              <option value="rename_file">rename_file</option>
+              <option value="copy_file">copy_file</option>
+              <option value="CHANGE_PASSWORD">CHANGE_PASSWORD</option>
+              <option value="CHANGE_ROLE">CHANGE_ROLE</option>
+            </select>
+            <span id="logCount" style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-muted);margin-left:auto;">
+              0 entries
+            </span>
+          </div>
+
+          <div class="logs-wrapper">
+            <table class="logs-table" id="logsTable">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>User</th>
+                  <th>Role</th>
+                  <th>Action</th>
+                  <th>Resource</th>
+                  <th>Status</th>
+                  <th>Duration</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="logsBody">
+                <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem;">
+                  Click Refresh to load logs…
+                </td></tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Pagination -->
+          <div id="logPagination" style="display:flex;align-items:center;justify-content:space-between;
+               padding:0.6rem 1rem;border-top:1px solid var(--border);font-family:var(--font-mono);font-size:0.75rem;">
+            <div style="color:var(--text-muted);">
+              Showing <span id="pageRangeLabel">—</span>
+            </div>
+            <div style="display:flex;gap:0.4rem;">
+              <button class="btn btn-secondary btn-sm" onclick="changePage(-1)" id="pagePrev">← Prev</button>
+              <span id="pageLabel" style="padding:0.25rem 0.75rem;color:var(--text-primary);">Page 1</span>
+              <button class="btn btn-secondary btn-sm" onclick="changePage(1)" id="pageNext">Next →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════ PANEL: user management (admin only) ══════ -->
+      <div class="panel syscall-panel" id="panel-users">
+        <div class="panel-header">
+          <div class="panel-title">👥 User Management</div>
+          <button class="btn btn-secondary btn-sm" onclick="loadUsers()">↻ Refresh</button>
+        </div>
+        <div class="panel-body">
+          <div id="usersList">
+            <p style="font-family:var(--font-mono);font-size:0.8rem;color:var(--text-muted);">
+              Click Refresh to load users…
+            </p>
+          </div>
+          <div class="alert" id="usersAlert" style="margin-top:1rem;"></div>
+        </div>
+      </div>
+
+      <!-- ══════ PANEL: profile ══════ -->
+      <div class="panel syscall-panel" id="panel-profile">
+        <div class="panel-header">
+          <div class="panel-title">👤 My Profile</div>
+          <button class="btn btn-secondary btn-sm" onclick="loadProfile()">↻ Refresh</button>
+        </div>
+        <div class="panel-body">
+          <div id="profileContent" style="font-family:var(--font-mono);font-size:0.85rem;color:var(--text-secondary);padding:1rem;">
+            Loading profile…
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════ PANEL: change_password ══════ -->
+      <div class="panel syscall-panel" id="panel-change_password">
+        <div class="panel-header">
+          <div class="panel-title">🔑 Change Password</div>
+        </div>
+        <div class="panel-body">
+          <p style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-muted);margin-bottom:1rem;">
+            Requires your current password for verification. New password must be 8+ characters with at least one number.
+          </p>
+
+          <div class="form-group">
+            <label class="form-label">Current Password</label>
+            <div style="position:relative;">
+              <input class="form-input" type="password" id="cpCurrentPwd" placeholder="enter current password" />
+              <button type="button" onclick="togglePwdField('cpCurrentPwd')"
+                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;color:var(--text-muted);">👁</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">New Password</label>
+            <div style="position:relative;">
+              <input class="form-input" type="password" id="cpNewPwd" placeholder="8+ chars, must include a number"
+                oninput="checkNewPwdStrength(this.value)" />
+              <button type="button" onclick="togglePwdField('cpNewPwd')"
+                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;color:var(--text-muted);">👁</button>
+            </div>
+            <div style="height:3px;background:var(--border);border-radius:2px;margin-top:6px;">
+              <div id="cpStrengthBar" style="height:100%;width:0%;border-radius:2px;transition:width 0.3s,background 0.3s;"></div>
+            </div>
+            <div id="cpStrengthText" style="font-family:var(--font-mono);font-size:0.68rem;color:var(--text-muted);margin-top:3px;min-height:16px;"></div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Confirm New Password</label>
+            <input class="form-input" type="password" id="cpConfirmPwd" placeholder="re-enter new password" />
+          </div>
+
+          <button class="btn btn-primary" onclick="executeChangePassword()">
+            🔑 Change Password
+          </button>
+
+          <div class="alert" id="cpAlert" style="margin-top:1rem;"></div>
+        </div>
+      </div>
+
+    </main>
+  </div><!-- /main-layout -->
+</div><!-- /dashboard -->
+
+<!-- Session progress bar at bottom of screen -->
+<div class="timer-bar">
+  <div class="timer-fill" id="timerFill" style="width:100%"></div>
+</div>
+
+<!-- Session expiry warning toast -->
+<div id="sessionWarningToast" style="display:none;position:fixed;bottom:2rem;right:1.5rem;z-index:9999;
+  background:var(--bg-card);border:1px solid var(--yellow);border-radius:8px;
+  padding:1rem 1.25rem;font-family:var(--font-mono);font-size:0.82rem;color:var(--yellow);
+  box-shadow:0 4px 24px rgba(0,0,0,0.4);min-width:260px;">
+  ⚠ <strong>Session expiring soon!</strong><br/>
+  <span id="sessionWarningTime" style="color:var(--text-muted);font-size:0.75rem;"></span><br/>
+  <div style="display:flex;gap:0.5rem;margin-top:0.75rem;">
+    <button class="btn btn-secondary btn-sm" onclick="dismissSessionWarning()">Dismiss</button>
+    <button class="btn btn-danger btn-sm" onclick="handleLogout()">Logout Now</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
