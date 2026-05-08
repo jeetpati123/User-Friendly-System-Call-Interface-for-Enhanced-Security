@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Theme initialisation: runs before paint to prevent flash -->
+  <script>
+    (function(){
+      var saved = localStorage.getItem('theme');
+      var sys   = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', saved || sys);
+    })();
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SecureSyscall — Login / Register</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Theme toggle: fixed top-right -->
+<button class="theme-toggle login-theme-btn" id="themeToggle" onclick="toggleTheme()" title="Toggle light/dark mode" aria-label="Toggle theme">🌙</button>
+
+<div class="login-bg">
+  <div class="login-container">
+
+    <!-- Header -->
+    <div class="login-header">
+      <div class="login-logo">🔐</div>
+      <h1 class="login-title">SecureSyscall</h1>
+      <p class="login-subtitle">Secure OS Kernel Interface Simulation · v2.0</p>
+    </div>
+
+    <!-- Tab Switcher -->
+    <div style="display:flex;border-radius:8px;overflow:hidden;border:1px solid var(--border);margin-bottom:1rem;">
+      <button id="tabLogin" onclick="switchTab('login')"
+        style="flex:1;padding:0.65rem;font-family:var(--font-mono);font-size:0.82rem;
+               background:var(--bg-card);color:var(--text-primary);border:none;
+               border-right:1px solid var(--border);cursor:pointer;transition:0.2s;font-weight:600;">
+        → Login
+      </button>
+      <button id="tabRegister" onclick="switchTab('register')"
+        style="flex:1;padding:0.65rem;font-family:var(--font-mono);font-size:0.82rem;
+               background:var(--bg-panel);color:var(--text-muted);border:none;
+               border-right:1px solid var(--border);cursor:pointer;transition:0.2s;">
+        + Register
+      </button>
+      <button id="tabForgot" onclick="switchTab('forgot')"
+        style="flex:1;padding:0.65rem;font-family:var(--font-mono);font-size:0.82rem;
+               background:var(--bg-panel);color:var(--text-muted);border:none;
+               cursor:pointer;transition:0.2s;">
+        🔑 Reset
+      </button>
+    </div>
+
+    <!-- ══════════════ LOGIN CARD ══════════════ -->
+    <div class="login-card" id="loginCard">
+      <div class="login-card-title">Authentication Required</div>
+
+      <div class="form-group">
+        <label class="form-label" for="loginUsername">Username</label>
+        <input class="form-input" type="text" id="loginUsername"
+          placeholder="enter username" autocomplete="username" autofocus />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="loginPassword">Password</label>
+        <div style="position:relative;">
+          <input class="form-input" type="password" id="loginPassword"
+            placeholder="enter password" autocomplete="current-password" />
+          <button type="button" onclick="togglePwd('loginPassword')"
+            style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
+                   background:none;border:none;cursor:pointer;font-size:1rem;color:var(--text-muted);"
+            title="Show/hide password">👁</button>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="loginBtn" onclick="handleLogin()">
+        <span id="loginBtnText">→ Authenticate</span>
+      </button>
+
+      <div class="alert" id="loginAlert"></div>
+
+      <!-- Lockout warning hint (shown after 1st failed attempt) -->
+      <div id="loginHint" style="display:none;font-family:var(--font-mono);font-size:0.71rem;
+        color:var(--yellow);text-align:center;margin-top:0.5rem;padding:0.4rem 0.75rem;
+        background:rgba(227,179,65,0.06);border:1px solid rgba(227,179,65,0.2);border-radius:6px;">
+        ⚠ Account locks after 3 failed attempts
+      </div>
+
+      <!-- Demo Credentials -->
+      <div class="login-demo">
+        <div class="login-demo-title">Demo Credentials (click to fill)</div>
+        <div class="demo-cred" onclick="fillLogin('admin','admin123')">
+          <span>👑</span><span>admin / admin123</span>
+          <span class="role-badge badge-admin">admin</span>
+        </div>
+        <div class="demo-cred" onclick="fillLogin('alice','user123')">
+          <span>👤</span><span>alice / user123</span>
+          <span class="role-badge badge-new">user</span>
+        </div>
+        <div class="demo-cred" onclick="fillLogin('guest','guest123')">
+          <span>👤</span><span>guest / guest123</span>
+          <span class="role-badge badge-new">user</span>
+        </div>
+        <div class="demo-cred" onclick="fillLogin('moderator','mod123')">
+          <span>🛡️</span><span>moderator / mod123</span>
+          <span class="role-badge badge-admin">moderator</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ REGISTER CARD ══════════════ -->
+    <div class="login-card" id="registerCard" style="display:none;">
+      <div class="login-card-title">Create New Account</div>
+
+      <!-- Info notice -->
+      <div style="font-family:var(--font-mono);font-size:0.71rem;color:var(--text-muted);
+                  background:var(--bg-dark);border:1px solid var(--border);
+                  border-radius:6px;padding:0.6rem 0.85rem;margin-bottom:1.1rem;line-height:1.9;">
+        ℹ New accounts are assigned <span style="color:var(--blue);font-weight:600;">user</span> role by default.<br/>
+        Contact an admin to get upgraded to <span style="color:var(--yellow);font-weight:600;">admin</span> role.
+      </div>
+
+      <!-- Username -->
+      <div class="form-group">
+        <label class="form-label" for="regUsername">Username</label>
+        <input class="form-input" type="text" id="regUsername"
+          placeholder="4–30 chars, start with a letter"
+          oninput="liveCheckUsername(this.value)" />
+        <div id="usernameHint" style="font-family:var(--font-mono);font-size:0.68rem;margin-top:4px;min-height:16px;"></div>
+      </div>
+
+      <!-- Password -->
+      <div class="form-group">
+        <label class="form-label" for="regPassword">Password</label>
+        <div style="position:relative;">
+          <input class="form-input" type="password" id="regPassword"
+            placeholder="8+ chars, must include a number"
+            oninput="liveCheckPassword(this.value)" />
+          <button type="button" onclick="togglePwd('regPassword')"
+            style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
+                   background:none;border:none;cursor:pointer;font-size:1rem;color:var(--text-muted);">👁</button>
+        </div>
+        <!-- Password strength bar -->
+        <div style="height:3px;background:var(--border);border-radius:2px;margin-top:6px;">
+          <div id="strengthBar" style="height:100%;width:0%;border-radius:2px;transition:width 0.3s,background 0.3s;"></div>
+        </div>
+        <div id="strengthText" style="font-family:var(--font-mono);font-size:0.68rem;color:var(--text-muted);margin-top:3px;min-height:16px;"></div>
+      </div>
+
+      <!-- Confirm Password -->
+      <div class="form-group">
+        <label class="form-label" for="regConfirm">Confirm Password</label>
+        <input class="form-input" type="password" id="regConfirm"
+          placeholder="re-enter your password"
+          oninput="liveCheckConfirm(this.value)" />
+        <div id="confirmHint" style="font-family:var(--font-mono);font-size:0.68rem;margin-top:4px;min-height:16px;"></div>
+      </div>
+
+      <!-- Email (optional) -->
+      <div class="form-group">
+        <label class="form-label" for="regEmail">
+          Email <span style="color:var(--text-muted);font-size:0.75rem;">(optional)</span>
+        </label>
+        <input class="form-input" type="email" id="regEmail" placeholder="your@email.com" />
+      </div>
+
+      <button class="btn btn-primary" id="registerBtn" onclick="handleRegister()">
+        <span id="registerBtnText">+ Create Account</span>
+      </button>
+
+      <div class="alert" id="registerAlert"></div>
+    </div>
+
+    <!-- ══════════════ FORGOT PASSWORD CARD ══════════════ -->
+    <div class="login-card" id="forgotCard" style="display:none;">
+
+      <!-- Step 1: Request token -->
+      <div id="forgotStep1">
+        <div class="login-card-title">Reset Password</div>
+        <p style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-muted);
+                  line-height:1.7;margin-bottom:1rem;">
+          Enter your username to receive a reset token.<br/>
+          <span style="color:var(--yellow);">⚠ Demo mode:</span> token is shown on screen. In production it would be sent by email.
+        </p>
+
+        <div class="form-group">
+          <label class="form-label" for="forgotUsername">Username</label>
+          <input class="form-input" type="text" id="forgotUsername"
+            placeholder="enter your username" autocomplete="username" />
+        </div>
+
+        <button class="btn btn-primary" id="forgotRequestBtn" onclick="handleForgotRequest()">
+          <span id="forgotRequestBtnText">📨 Send Reset Token</span>
+        </button>
+
+        <div class="alert" id="forgotRequestAlert" style="margin-top:0.75rem;"></div>
+
+        <!-- Token display box (shown after success) -->
+        <div id="forgotTokenBox" style="display:none;margin-top:1rem;
+          background:var(--bg-dark);border:1px solid var(--yellow);border-radius:8px;
+          padding:1rem;font-family:var(--font-mono);">
+          <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.5rem;text-align:center;">
+            YOUR RESET TOKEN (valid 15 minutes)
+          </div>
+          <div id="forgotTokenValue" style="font-size:2rem;letter-spacing:0.4rem;
+            color:var(--yellow);font-weight:700;text-align:center;padding:0.5rem 0;"></div>
+          <div style="font-size:0.7rem;color:var(--text-muted);text-align:center;margin-top:0.2rem;">
+            Copy this token, then proceed below
+          </div>
+          <button class="btn btn-secondary" style="width:100%;margin-top:0.75rem;"
+            onclick="goToForgotStep2()">
+            → Enter Token &amp; New Password
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 2: Enter token + new password -->
+      <div id="forgotStep2" style="display:none;">
+        <div class="login-card-title">Set New Password</div>
+
+        <div class="form-group">
+          <label class="form-label">Reset Token</label>
+          <input class="form-input" type="text" id="forgotTokenInput"
+            placeholder="enter the 6-digit token"
+            style="letter-spacing:0.2rem;font-size:1.1rem;text-align:center;"
+            maxlength="6" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">New Password</label>
+          <div style="position:relative;">
+            <input class="form-input" type="password" id="forgotNewPwd"
+              placeholder="8+ chars, must include a number"
+              oninput="checkForgotPwdStrength(this.value)" />
+            <button type="button" onclick="togglePwd('forgotNewPwd')"
+              style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
+                     background:none;border:none;cursor:pointer;font-size:1rem;color:var(--text-muted);">👁</button>
+          </div>
+          <div style="height:3px;background:var(--border);border-radius:2px;margin-top:6px;">
+            <div id="forgotStrengthBar" style="height:100%;width:0%;border-radius:2px;transition:width 0.3s,background 0.3s;"></div>
+          </div>
+          <div id="forgotStrengthText" style="font-family:var(--font-mono);font-size:0.68rem;
+            color:var(--text-muted);margin-top:3px;min-height:16px;"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Confirm New Password</label>
+          <input class="form-input" type="password" id="forgotConfirmPwd"
+            placeholder="re-enter new password" />
+        </div>
+
+        <div style="display:flex;gap:0.6rem;">
+          <button class="btn btn-secondary" style="flex:0 0 auto;" onclick="goToForgotStep1()">← Back</button>
+          <button class="btn btn-primary" style="flex:1;" id="forgotResetBtn" onclick="handleForgotReset()">
+            <span id="forgotResetBtnText">🔑 Reset Password</span>
+          </button>
+        </div>
+
+        <div class="alert" id="forgotResetAlert" style="margin-top:0.75rem;"></div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── Auto-redirect if already logged in ─────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const res = await fetch('/api/whoami');
+    if (res.ok) window.location.href = '/dashboard.html';
+  } catch (_) {}
+});
+
+// ══════════════════════════════════════════════════
+// TAB SWITCHING
+// ══════════════════════════════════════════════════
+
+function switchTab(tab) {
+  const isLogin    = tab === 'login';
+  const isRegister = tab === 'register';
+  const isForgot   = tab === 'forgot';
+
+  document.getElementById('loginCard').style.display    = isLogin    ? 'block' : 'none';
+  document.getElementById('registerCard').style.display = isRegister ? 'block' : 'none';
+  document.getElementById('forgotCard').style.display   = isForgot   ? 'block' : 'none';
+
+  // Active tab styling
+  const tabs = [
+    { id: 'tabLogin',    active: isLogin    },
+    { id: 'tabRegister', active: isRegister },
+    { id: 'tabForgot',   active: isForgot   }
+  ];
+  tabs.forEach(({ id, active }) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.background = active ? 'var(--bg-card)'      : 'var(--bg-panel)';
+    el.style.color      = active ? 'var(--text-primary)' : 'var(--text-muted)';
+    el.style.fontWeight = active ? '600'                 : '400';
+  });
+
+  // Clear all alerts on tab switch
+  ['loginAlert','registerAlert','forgotRequestAlert','forgotResetAlert'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.className = 'alert';
+  });
+}
+
+// ══════════════════════════════════════════════════
+// FORGOT PASSWORD — STEP 1 (request token)
+// ══════════════════════════════════════════════════
+
+async function handleForgotRequest() {
+  const username = document.getElementById('forgotUsername').value.trim();
+  const btn      = document.getElementById('forgotRequestBtn');
+  const btnText  = document.getElementById('forgotRequestBtnText');
+
+  if (!username) {
+    showAlert('forgotRequestAlert', '⚠ Please enter your username.');
+    return;
+  }
+
+  btn.disabled      = true;
+  btnText.innerHTML = '<span class="spinner"></span> Sending…';
+
+  try {
+    const res  = await fetch('/api/auth/forgot-password', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ username })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      showAlert('forgotRequestAlert', `✓ ${data.message}`, 'success');
+      // Show the token box with the token (demo mode — in production this is emailed)
+      document.getElementById('forgotTokenValue').textContent = data.token;
+      document.getElementById('forgotTokenBox').style.display = 'block';
+      // Pre-fill token in step 2
+      document.getElementById('forgotTokenInput').value = data.token;
+    } else {
+      showAlert('forgotRequestAlert', `✗ ${data.message}`);
+    }
+  } catch (_) {
+    showAlert('forgotRequestAlert', '✗ Connection error. Is the server running?');
+  } finally {
+    btn.disabled      = false;
+    btnText.textContent = '📨 Send Reset Token';
+  }
+}
+
+function goToForgotStep2() {
+  document.getElementById('forgotStep1').style.display = 'none';
+  document.getElementById('forgotStep2').style.display = 'block';
+  document.getElementById('forgotNewPwd').focus();
+}
+
+function goToForgotStep1() {
+  document.getElementById('forgotStep2').style.display = 'none';
+  document.getElementById('forgotStep1').style.display = 'block';
+}
+
+function checkForgotPwdStrength(val) {
+  const bar  = document.getElementById('forgotStrengthBar');
+  const text = document.getElementById('forgotStrengthText');
+  if (!val) { bar.style.width = '0%'; text.textContent = ''; return; }
+  let score = 0;
+  if (val.length >= 8)  score++;
+  if (val.length >= 12) score++;
+  if (/[A-Z]/.test(val) && /[a-z]/.test(val)) score++;
+  if (/[0-9]/.test(val)) score++;
+  if (/[^a-zA-Z0-9]/.test(val)) score++;
+  const levels = [
+    { pct: '20%', color: 'var(--red)',    label: '✗ Too weak' },
+    { pct: '40%', color: 'var(--orange)', label: '▲ Weak' },
+    { pct: '60%', color: 'var(--yellow)', label: '◆ Fair' },
+    { pct: '80%', color: 'var(--blue)',   label: '✓ Good' },
+    { pct: '100%',color: 'var(--green)',  label: '✓✓ Strong' }
+  ];
+  const level = levels[Math.min(score, 4)];
+  bar.style.width = level.pct; bar.style.background = level.color;
+  text.textContent = level.label; text.style.color = level.color;
+}
+
+// ══════════════════════════════════════════════════
+// FORGOT PASSWORD — STEP 2 (reset with token)
+// ══════════════════════════════════════════════════
+
+async function handleForgotReset() {
+  const username   = document.getElementById('forgotUsername').value.trim();
+  const token      = document.getElementById('forgotTokenInput').value.trim();
+  const newPwd     = document.getElementById('forgotNewPwd').value;
+  const confirmPwd = document.getElementById('forgotConfirmPwd').value;
+  const btn        = document.getElementById('forgotResetBtn');
+  const btnText    = document.getElementById('forgotResetBtnText');
+
+  if (!token)           { showAlert('forgotResetAlert', '⚠ Please enter the reset token.'); return; }
+  if (!newPwd)          { showAlert('forgotResetAlert', '⚠ Please enter a new password.');  return; }
+  if (newPwd.length < 8){ showAlert('forgotResetAlert', '⚠ Password must be at least 8 characters.'); return; }
+  if (!/\d/.test(newPwd)){ showAlert('forgotResetAlert', '⚠ Password must contain at least one number.'); return; }
+  if (newPwd !== confirmPwd){ showAlert('forgotResetAlert', '⚠ Passwords do not match.'); return; }
+
+  btn.disabled      = true;
+  btnText.innerHTML = '<span class="spinner"></span> Resetting…';
+
+  try {
+    const res  = await fetch('/api/auth/reset-password', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ username, token, newPassword: newPwd })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      showAlert('forgotResetAlert', `✓ ${data.message} Redirecting to login…`, 'success');
+      setTimeout(() => {
+        // Clear all forgot fields and go back to login
+        ['forgotUsername','forgotTokenInput','forgotNewPwd','forgotConfirmPwd'].forEach(id => {
+          document.getElementById(id).value = '';
+        });
+        document.getElementById('forgotTokenBox').style.display   = 'none';
+        document.getElementById('forgotStep2').style.display      = 'none';
+        document.getElementById('forgotStep1').style.display      = 'block';
+        document.getElementById('forgotStrengthBar').style.width  = '0%';
+        document.getElementById('forgotStrengthText').textContent = '';
+        switchTab('login');
+      }, 2000);
+    } else {
+      showAlert('forgotResetAlert', `✗ ${data.message}`);
+    }
+  } catch (_) {
+    showAlert('forgotResetAlert', '✗ Connection error.');
+  } finally {
+    btn.disabled        = false;
+    btnText.textContent = '🔑 Reset Password';
+  }
+}
+
+// ══════════════════════════════════════════════════
+// UTILITIES
+// ══════════════════════════════════════════════════
+
+function togglePwd(id) {
+  const el = document.getElementById(id);
+  el.type  = el.type === 'password' ? 'text' : 'password';
+}
+
+function showAlert(id, msg, type = 'error') {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className   = `alert alert-${type} show`;
+}
+
+function setHint(id, msg, color = 'var(--text-muted)') {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.style.color = color;
+}
+
+// ══════════════════════════════════════════════════
+// LOGIN
+// ══════════════════════════════════════════════════
+
+let loginFailCount = 0;
+
+function fillLogin(u, p) {
+  document.getElementById('loginUsername').value = u;
+  document.getElementById('loginPassword').value = p;
+  document.getElementById('loginBtn').focus();
+}
+
+async function handleLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const btn      = document.getElementById('loginBtn');
+  const btnText  = document.getElementById('loginBtnText');
+
+  if (!username || !password) {
+    showAlert('loginAlert', '⚠ Please enter both username and password.');
+    return;
+  }
+
+  btn.disabled        = true;
+  btnText.innerHTML   = '<span class="spinner"></span> Authenticating…';
+
+  try {
+    const res  = await fetch('/api/login', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      showAlert('loginAlert', `✓ ${data.message} — Redirecting…`, 'success');
+      setTimeout(() => { window.location.href = '/dashboard.html'; }, 700);
+    } else {
+      loginFailCount++;
+      showAlert('loginAlert', `✗ ${data.message}`);
+      if (loginFailCount >= 1) {
+        document.getElementById('loginHint').style.display = 'block';
+      }
+      btn.disabled              = false;
+      btnText.textContent       = '→ Authenticate';
+      document.getElementById('loginPassword').value = '';
+      document.getElementById('loginPassword').focus();
+    }
+  } catch (_) {
+    showAlert('loginAlert', '✗ Connection error. Is the server running?');
+    btn.disabled        = false;
+    btnText.textContent = '→ Authenticate';
+  }
+}
+
+// Allow Enter key on all forms
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const loginVisible    = document.getElementById('loginCard').style.display    !== 'none';
+  const registerVisible = document.getElementById('registerCard').style.display !== 'none';
+  const forgotVisible   = document.getElementById('forgotCard').style.display   !== 'none';
+  if (loginVisible)    handleLogin();
+  else if (registerVisible) handleRegister();
+  else if (forgotVisible) {
+    const step2 = document.getElementById('forgotStep2').style.display !== 'none';
+    if (step2) handleForgotReset(); else handleForgotRequest();
+  }
+});
+
+// ══════════════════════════════════════════════════
+// REGISTER — LIVE VALIDATION
+// ══════════════════════════════════════════════════
+
+function liveCheckUsername(val) {
+  // Validation rules: 4–30 chars, letters/digits/underscore, must start with a letter
+  const input = document.getElementById('regUsername');
+  if (!val) {
+    setHint('usernameHint', '');
+    input.style.borderColor = '';
+    input.style.boxShadow   = '';
+    return;
+  }
+  let msg = '', color = '', borderColor = '', shadow = '';
+
+  if (!/^[a-zA-Z]/.test(val)) {
+    msg = '✗ Must start with a letter (a–z or A–Z)';
+    color = 'var(--red)'; borderColor = 'var(--red)'; shadow = '0 0 0 3px var(--red-glow)';
+  } else if (val.length < 4) {
+    msg = '✗ Too short — minimum 4 characters';
+    color = 'var(--red)'; borderColor = 'var(--red)'; shadow = '0 0 0 3px var(--red-glow)';
+  } else if (val.length > 30) {
+    msg = '✗ Too long — maximum 30 characters';
+    color = 'var(--red)'; borderColor = 'var(--red)'; shadow = '0 0 0 3px var(--red-glow)';
+  } else if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(val)) {
+    msg = '✗ Only letters, numbers, and underscore (_) — no spaces or special chars';
+    color = 'var(--red)'; borderColor = 'var(--red)'; shadow = '0 0 0 3px var(--red-glow)';
+  } else {
+    msg = '✔ Username is valid';
+    color = 'var(--green)'; borderColor = 'var(--green)'; shadow = '0 0 0 3px var(--green-glow)';
+  }
+
+  setHint('usernameHint', msg, color);
+  input.style.borderColor = borderColor;
+  input.style.boxShadow   = shadow;
+}
+
+function liveCheckPassword(val) {
+  const bar  = document.getElementById('strengthBar');
+  const text = document.getElementById('strengthText');
+  if (!val) { bar.style.width = '0%'; text.textContent = ''; return; }
+
+  // Calculate password strength score (0–4)
+  let score = 0;
+  if (val.length >= 8)  score++;
+  if (val.length >= 12) score++;
+  if (/[A-Z]/.test(val) && /[a-z]/.test(val)) score++;
+  if (/[0-9]/.test(val)) score++;
+  if (/[^a-zA-Z0-9]/.test(val)) score++;
+
+  const levels = [
+    { pct: '20%', color: 'var(--red)',    label: '✗ Too weak' },
+    { pct: '40%', color: 'var(--orange)', label: '▲ Weak' },
+    { pct: '60%', color: 'var(--yellow)', label: '◆ Fair' },
+    { pct: '80%', color: 'var(--blue)',   label: '✓ Good' },
+    { pct: '100%',color: 'var(--green)',  label: '✓✓ Strong' }
+  ];
+  const level = levels[Math.min(score, 4)];
+  bar.style.width      = level.pct;
+  bar.style.background = level.color;
+  text.textContent     = level.label;
+  text.style.color     = level.color;
+
+  // Also re-check confirm field if it has a value
+  const confirm = document.getElementById('regConfirm').value;
+  if (confirm) liveCheckConfirm(confirm);
+}
+
+function liveCheckConfirm(val) {
+  const pwd = document.getElementById('regPassword').value;
+  if (!val) { setHint('confirmHint', ''); return; }
+  if (val === pwd) {
+    setHint('confirmHint', '✓ Passwords match', 'var(--green)');
+  } else {
+    setHint('confirmHint', '✗ Passwords do not match', 'var(--red)');
+  }
+}
+
+// ══════════════════════════════════════════════════
+// REGISTER — SUBMISSION
+// ══════════════════════════════════════════════════
+
+async function handleRegister() {
+  const username = document.getElementById('regUsername').value.trim();
+  const password = document.getElementById('regPassword').value;
+  const confirm  = document.getElementById('regConfirm').value;
+  const email    = document.getElementById('regEmail').value.trim();
+  const btn      = document.getElementById('registerBtn');
+  const btnText  = document.getElementById('registerBtnText');
+
+  // ── Client-side validation before sending to server ──────────────────
+  if (!username || !password || !confirm) {
+    showAlert('registerAlert', '⚠ Please fill in all required fields.');
+    return;
+  }
+
+  // Updated validation: 4+ chars, letters/digits/underscore, must start with a letter
+  if (!/^[a-zA-Z]/.test(username)) {
+    showAlert('registerAlert', '⚠ Username must start with a letter (a–z or A–Z).');
+    document.getElementById('regUsername').focus();
+    return;
+  }
+  if (username.length < 4) {
+    showAlert('registerAlert', '⚠ Username must be at least 4 characters.');
+    document.getElementById('regUsername').focus();
+    return;
+  }
+  if (!/^[a-zA-Z][a-zA-Z0-9_]{0,29}$/.test(username)) {
+    showAlert('registerAlert', '⚠ Username may only contain letters, numbers, and underscore (_).');
+    document.getElementById('regUsername').focus();
+    return;
+  }
+
+  if (password.length < 8) {
+    showAlert('registerAlert', '⚠ Password must be at least 8 characters.');
+    return;
+  }
+  if (!/\d/.test(password)) {
+    showAlert('registerAlert', '⚠ Password must contain at least one number.');
+    return;
+  }
+
+  if (password !== confirm) {
+    showAlert('registerAlert', '⚠ Passwords do not match.');
+    document.getElementById('regConfirm').focus();
+    return;
+  }
+
+  // ── Send registration request ────────────────────────────────────────
+  btn.disabled        = true;
+  btnText.innerHTML   = '<span class="spinner"></span> Creating account…';
+
+  try {
+    const res  = await fetch('/api/register', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ username, password, email })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      // Show success and auto-switch to login tab after 2 seconds
+      showAlert('registerAlert', `✓ ${data.message}`, 'success');
+      setTimeout(() => {
+        switchTab('login');
+        document.getElementById('loginUsername').value = username;
+        document.getElementById('loginPassword').focus();
+        showAlert('loginAlert', '✓ Account created! Enter your password to log in.', 'success');
+      }, 2000);
+
+      // Reset form
+      ['regUsername','regPassword','regConfirm','regEmail'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('strengthBar').style.width = '0%';
+      document.getElementById('strengthText').textContent = '';
+      ['usernameHint','confirmHint'].forEach(id => {
+        document.getElementById(id).textContent = '';
+      });
+
+    } else {
+      showAlert('registerAlert', `✗ ${data.message}`);
+    }
+
+  } catch (_) {
+    showAlert('registerAlert', '✗ Connection error. Is the server running?');
+  }
+
+  btn.disabled        = false;
+  btnText.textContent = '+ Create Account';
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// THEME MANAGEMENT (Dark / Light Mode)
+// ══════════════════════════════════════════════════════════════════════════
+
+function getTheme() {
+  return document.documentElement.getAttribute('data-theme') || 'dark';
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+  // Update toggle icon
+  const btn = document.getElementById('themeToggle');
+  if (btn) btn.textContent = theme === 'dark' ? '🌙' : '☀️';
+}
+
+function toggleTheme() {
+  applyTheme(getTheme() === 'dark' ? 'light' : 'dark');
+}
+
+// Sync toggle icon on load
+window.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('themeToggle');
+  if (btn) btn.textContent = getTheme() === 'dark' ? '🌙' : '☀️';
+}, { once: false });
+
+</script>
+
+</body>
+</html>
